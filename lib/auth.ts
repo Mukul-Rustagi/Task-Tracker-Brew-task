@@ -6,67 +6,63 @@ import User from '@/models/User';
 import { ENV, ERROR_MESSAGES, FEATURES } from './constants';
 import { signinSchema } from './validations';
 
-// Build providers array conditionally
-const providers = [
-  CredentialsProvider({
-    name: 'Credentials',
-    credentials: {
-      email: { label: 'Email', type: 'email' },
-      password: { label: 'Password', type: 'password' },
-    },
-    async authorize(credentials) {
-      if (!credentials?.email || !credentials?.password) {
-        throw new Error(ERROR_MESSAGES.VALIDATION.REQUIRED_FIELD);
-      }
-
-      try {
-        // Validate input
-        const validatedData = signinSchema.parse(credentials);
-
-        await dbConnect();
-
-        const user = await User.findOne({ email: validatedData.email }).select('+password');
-
-        if (!user) {
-          throw new Error(ERROR_MESSAGES.AUTH.INVALID_CREDENTIALS);
-        }
-
-        if (!user.password) {
-          throw new Error(ERROR_MESSAGES.AUTH.GOOGLE_SIGNIN_REQUIRED);
-        }
-
-        const isPasswordValid = await user.comparePassword(credentials.password);
-
-        if (!isPasswordValid) {
-          throw new Error(ERROR_MESSAGES.AUTH.INVALID_CREDENTIALS);
-        }
-
-        return {
-          id: user._id.toString(),
-          email: user.email,
-          name: user.name,
-          image: user.image,
-        };
-      } catch (error) {
-        console.error('Authorization error:', error);
-        throw error;
-      }
-    },
-  }),
-];
-
-// Add Google provider only if credentials are configured
-if (FEATURES.GOOGLE_AUTH_ENABLED) {
-  providers.push(
-    GoogleProvider({
-      clientId: ENV.GOOGLE_CLIENT_ID,
-      clientSecret: ENV.GOOGLE_CLIENT_SECRET,
-    })
-  );
-}
-
 export const authOptions: NextAuthOptions = {
-  providers,
+  providers: [
+    CredentialsProvider({
+      name: 'Credentials',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error(ERROR_MESSAGES.VALIDATION.REQUIRED_FIELD);
+        }
+
+        try {
+          // Validate input
+          const validatedData = signinSchema.parse(credentials);
+
+          await dbConnect();
+
+          const user = await User.findOne({ email: validatedData.email }).select('+password');
+
+          if (!user) {
+            throw new Error(ERROR_MESSAGES.AUTH.INVALID_CREDENTIALS);
+          }
+
+          if (!user.password) {
+            throw new Error(ERROR_MESSAGES.AUTH.GOOGLE_SIGNIN_REQUIRED);
+          }
+
+          const isPasswordValid = await user.comparePassword(credentials.password);
+
+          if (!isPasswordValid) {
+            throw new Error(ERROR_MESSAGES.AUTH.INVALID_CREDENTIALS);
+          }
+
+          return {
+            id: user._id.toString(),
+            email: user.email,
+            name: user.name,
+            image: user.image,
+          };
+        } catch (error) {
+          console.error('Authorization error:', error);
+          throw error;
+        }
+      },
+    }),
+    // Conditionally add Google provider
+    ...(FEATURES.GOOGLE_AUTH_ENABLED
+      ? [
+          GoogleProvider({
+            clientId: ENV.GOOGLE_CLIENT_ID,
+            clientSecret: ENV.GOOGLE_CLIENT_SECRET,
+          }),
+        ]
+      : []),
+  ],
   callbacks: {
     async signIn({ user, account }) {
       try {
